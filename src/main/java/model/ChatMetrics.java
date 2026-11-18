@@ -16,7 +16,7 @@ public class ChatMetrics {
             .help("Notifications created for chat users")
             .register(registry);
 
-    ChatMetrics(long requestsCount, long notificationsCount) {
+    public ChatMetrics(long requestsCount, long notificationsCount) {
         update(requestsCount, notificationsCount);
     }
 

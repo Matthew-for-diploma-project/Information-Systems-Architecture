@@ -1,0 +1,13 @@
+{
+  "java": "Temurin OpenJDK 23.0.1+11",
+  "mode": "independent JVM replicas over loopback TCP, one H2 TCP database per run",
+  "clients": 12,
+  "requests": 600,
+  "warmup_per_client": 5,
+  "repeats": 3,
+  "heap_each": "-Xms16m -Xmx96m",
+  "kernel": "6.18.57",
+  "arch": "x86_64",
+  "cpu_affinity": 9,
+  "jar_sha256": "4e53070cf34dc9cd6b392326b7c769047f0586a499194ad76a65e8bfec8bcd77"
+}

@@ -22,8 +22,8 @@ WORKDIR /app
 
 COPY --from=build /project/target/chat.jar /app/chat.jar
 
-EXPOSE 5555
+EXPOSE 5555 6001 6002 9092
 
 ENTRYPOINT ["java", "-jar", "/app/chat.jar"]
 
-CMD ["server", "/data/chat", "5555", "0.0.0.0"]
+CMD ["facade"]

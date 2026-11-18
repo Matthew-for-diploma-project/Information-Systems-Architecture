@@ -1,5 +1,9 @@
 package model;
 
+import api.Facade;
+import api.ChatService;
+import distributed.Wire;
+
 import java.io.BufferedReader;
 import java.io.BufferedWriter;
 import java.io.IOException;
@@ -21,7 +25,8 @@ import java.util.concurrent.TimeUnit;
 
 public final class TcpChatServer implements AutoCloseable {
     private final ServerSocket listener;
-    private final ChatServer chat;
+    private final ChatService owner;
+    private final Facade facade;
 
     private final ExecutorService workers =
             Executors.newCachedThreadPool();
@@ -34,23 +39,27 @@ public final class TcpChatServer implements AutoCloseable {
     public TcpChatServer(Path database, int port) throws IOException {
         this(database, "127.0.0.1", port);
     }
-
-    public TcpChatServer(
-            Path database,
-            String host,
-            int port
-    ) throws IOException {
+    public TcpChatServer(Path database, String host, int port) throws IOException {
+        this(new ChatServer(database), host, port);
+    }
+    private TcpChatServer(ChatService chat, String host, int port) throws IOException {
+        this(new ChatFacade(packet -> Wire.dispatch(chat, packet)), chat, host, port);
+    }
+    public TcpChatServer(Facade facade, String host, int port) throws IOException {
+        this(facade, null, host, port);
+    }
+    private TcpChatServer(Facade facade, ChatService owner, String host, int port) throws IOException {
+        this.facade = facade;
+        this.owner = owner;
         listener = new ServerSocket();
-
         try {
+            listener.setReuseAddress(true);
             listener.bind(new InetSocketAddress(host, port));
-            chat = new ChatServer(database);
-        } catch (IOException | RuntimeException exception) {
-            closeSocket(listener);
-            workers.shutdown();
-            throw exception;
+        } catch (IOException | RuntimeException error) {
+            closeSocket(listener); workers.shutdown();
+            if (owner != null) owner.close();
+            throw error;
         }
-
         workers.execute(this::acceptClients);
     }
 
@@ -110,7 +119,7 @@ public final class TcpChatServer implements AutoCloseable {
                         break;
                     }
 
-                    response = execute(request);
+                    response = facade.handle(request);
                 } catch (IllegalArgumentException exception) {
                     response = List.of(
                             "ERROR",
@@ -139,106 +148,6 @@ public final class TcpChatServer implements AutoCloseable {
         } finally {
             clients.remove(socket);
         }
-    }
-
-    private List<String> execute(List<String> request) {
-        String command = request.get(0);
-
-        if (command == null) {
-            throw new IllegalArgumentException("Команда не задана");
-        }
-
-        int size = switch (command) {
-            case "CONNECT", "DISCONNECT", "READ",
-                 "HISTORY", "STATE" -> 2;
-            case "NOTIFICATIONS", "SEND", "ACK" -> 3;
-            case "USERS", "METRICS" -> 1;
-            default -> throw new IllegalArgumentException(
-                    "Неизвестная команда: " + command
-            );
-        };
-
-        if (request.size() != size) {
-            throw new IllegalArgumentException(
-                    "Неверное число аргументов"
-            );
-        }
-
-        List<String> result = new ArrayList<>();
-        result.add("OK");
-
-        switch (command) {
-            case "CONNECT" -> chat.connect(request.get(1));
-
-            case "DISCONNECT" -> chat.disconnect(request.get(1));
-
-            case "NOTIFICATIONS" -> chat.setNotificationsEnabled(
-                    request.get(1),
-                    ChatProtocol.booleanValue(request.get(2))
-            );
-
-            case "SEND" -> ChatProtocol.addMessage(
-                    result,
-                    chat.sendMessage(
-                            request.get(1),
-                            request.get(2)
-                    )
-            );
-
-            case "READ", "HISTORY" -> {
-                List<Message> messages = command.equals("READ")
-                        ? chat.readNotifications(request.get(1))
-                        : chat.getHistory(request.get(1));
-
-                result.add(Integer.toString(messages.size()));
-
-                for (Message message : messages) {
-                    ChatProtocol.addMessage(result, message);
-                }
-            }
-
-            case "ACK" -> chat.acknowledgeNotification(
-                    request.get(1),
-                    Long.parseLong(request.get(2))
-            );
-
-            case "STATE" -> ChatProtocol.addUser(
-                    result,
-                    chat.getUserState(request.get(1))
-            );
-
-            case "USERS" -> {
-                List<UserState> users = chat.getUsers();
-                result.add(Integer.toString(users.size()));
-
-                for (UserState user : users) {
-                    ChatProtocol.addUser(result, user);
-                }
-            }
-
-            case "METRICS" -> {
-                synchronized (chat) {
-                    result.add(
-                            Long.toString(
-                                    chat.getMetrics().getRequestsCount()
-                            )
-                    );
-
-                    result.add(
-                            Long.toString(
-                                    chat.getMetrics()
-                                            .getNotificationsCount()
-                            )
-                    );
-                }
-            }
-
-            default -> throw new IllegalArgumentException(
-                    "Неизвестная команда"
-            );
-        }
-
-        return result;
     }
 
     private String errorText(RuntimeException exception) {
@@ -284,7 +193,7 @@ public final class TcpChatServer implements AutoCloseable {
                     exception
             );
         } finally {
-            chat.close();
+            if (owner != null) owner.close();
         }
     }
 }

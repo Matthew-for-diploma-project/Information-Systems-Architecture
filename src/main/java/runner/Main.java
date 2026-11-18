@@ -29,6 +29,25 @@ public final class Main {
     public static void main(String[] args) throws Exception {
         String mode = args.length == 0 ? "demo" : args[0];
 
+        switch (mode) {
+            case "facade" -> { distributed.FacadeMain.main(args); return; }
+            case "business" -> { distributed.BusinessMain.main(args); return; }
+            case "storage" -> { distributed.StorageMain.main(args); return; }
+            case "database" -> { distributed.DatabaseMain.main(args); return; }
+            case "benchmark" -> { distributed.BenchmarkMain.main(args); return; }
+            case "proto-health" -> {
+                try { distributed.Wire.call(args[1], Integer.parseInt(args[2]), distributed.Packet.of("METRICS")); }
+                catch (RuntimeException error) { System.exit(1); }
+                return;
+            }
+            case "db-health" -> {
+                try (var connection = java.sql.DriverManager.getConnection(args[1], "sa", "")) {
+                    if (!connection.isValid(2)) System.exit(1);
+                } catch (java.sql.SQLException error) { System.exit(1); }
+                return;
+            }
+        }
+
         if (mode.equals("health")) {
             String host = args.length > 1
                     ? args[1]

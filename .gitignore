@@ -37,3 +37,10 @@ build/
 
 ### Mac OS ###
 .DS_Store
+# Runtime files
+data/
+*.mv.db
+*.trace.db
+benchmarks/benchmark-last.csv
+benchmarks/benchmark-results.csv
+benchmarks/benchmark-comparison.md

@@ -1,0 +1,10 @@
+syntax = "proto3";
+package chat;
+
+// Контракт между контейнерами, как Packet в примере lab5.
+// Packet.java читает/пишет эти поля через официальную protobuf-java.
+// protoc и генерация Java-кода для этой маленькой схемы не требуются.
+message Packet {
+  string operation = 1;
+  repeated string values = 2;
+}

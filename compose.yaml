@@ -1,74 +1,121 @@
+# Сохранено имя проекта и тома лабораторной №4.
 name: group-chat-lab4
 
+x-app: &app
+  image: group-chat-lab5-app:local
+  build:
+    context: .
+    target: runtime
+  stop_grace_period: 30s
+
 services:
-  server:
-    image: group-chat-lab4-app:local
-
-    build:
-      context: .
-      target: runtime
-
-    command:
-      - server
-      - /data/chat
-      - "5555"
-      - 0.0.0.0
-
-    ports:
-      - "127.0.0.1:5555:5555"
-
-    volumes:
-      - chat-data:/data
-
+  database:
+    <<: *app
+    command: [database]
+    environment:
+      DB_FILE: /data/chat
+      DB_PORT: "9092"
+    volumes: [chat-data:/data]
+    networks: [database]
     healthcheck:
-      test: "java -jar /app/chat.jar health 127.0.0.1 5555"
+      test: [CMD, java, -jar, /app/chat.jar, db-health, "jdbc:h2:tcp://127.0.0.1:9092/chat"]
       interval: 5s
       timeout: 5s
       retries: 10
       start_period: 15s
 
-    stop_grace_period: 30s
+  storage:
+    <<: *app
+    command: [storage]
+    environment:
+      H2_URL: "jdbc:h2:tcp://database:9092/chat;WRITE_DELAY=0;LOCK_TIMEOUT=30000"
+    networks: [database, storage]
+    depends_on:
+      database:
+        condition: service_healthy
+    healthcheck:
+      test: [CMD, java, -jar, /app/chat.jar, proto-health, 127.0.0.1, "6002"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
 
+  business:
+    <<: *app
+    command: [business]
+    environment:
+      STORAGE_HOST: storage
+    networks: [storage, business]
+    depends_on:
+      storage:
+        condition: service_healthy
+    healthcheck:
+      test: [CMD, java, -jar, /app/chat.jar, proto-health, 127.0.0.1, "6001"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  facade:
+    <<: *app
+    command: [facade]
+    environment:
+      BUSINESS_HOST: business
+    networks: [business, frontend]
+    depends_on:
+      business:
+        condition: service_healthy
+    # Свободный порт хоста для КАЖДОЙ реплики; внутри всегда facade:5555.
+    ports:
+      - target: 5555
+        host_ip: 127.0.0.1
+        protocol: tcp
+    healthcheck:
+      test: [CMD, java, -jar, /app/chat.jar, health, 127.0.0.1, "5555"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
 
   client:
-    image: group-chat-lab4-app:local
-
-    build:
-      context: .
-      target: runtime
-
-    command:
-      - client
-      - server
-      - "5555"
-
+    <<: *app
+    command: [client, facade, "5555"]
+    networks: [frontend]
     depends_on:
-      server:
+      facade:
         condition: service_healthy
-
-    profiles:
-      - tools
+    profiles: [tools]
 
   tests:
-    image: group-chat-lab4-tests:local
-
+    image: group-chat-lab5-tests:local
     build:
       context: .
       target: tests
-
     environment:
-      CHAT_HOST: server
+      CHAT_HOST: facade
       CHAT_PORT: "5555"
-
+    networks: [frontend, downloads]
+    volumes: [maven-cache:/root/.m2]
     depends_on:
-      server:
+      facade:
         condition: service_healthy
+    profiles: [tools]
 
-    volumes:
-      - maven-cache:/root/.m2
+  benchmark:
+    <<: *app
+    command: [benchmark]
+    environment:
+      CHAT_HOST: facade
+      CHAT_PORT: "5555"
+      BENCH_REQUESTS: "${BENCH_REQUESTS:-600}"
+      BENCH_THREADS: "${BENCH_THREADS:-12}"
+    volumes: [./benchmarks:/results]
+    networks: [frontend]
+    profiles: [tools]
 
-    profiles:
-      - tools
+networks:
+  frontend: {}
+  business: {internal: true}
+  storage: {internal: true}
+  database: {internal: true}
+  downloads: {}
 
 volumes:
   chat-data:

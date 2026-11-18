@@ -2,17 +2,8 @@ package runner;
 
 import api.ChatService;
 import model.Message;
-import transport.TcpChatClient;
-import transport.TcpChatServer;
-import facade.ChatFacade;
-import rpc.ProtoServer;
-import rpc.RemoteEndpoint;
-import rpc.generated.ChatWire.Request;
-import service.ApplicationEndpoint;
-import service.ChatServer;
-import storage.JdbcChatRepository;
-import storage.RemoteChatRepository;
-import storage.RepositoryEndpoint;
+import model.TcpChatClient;
+import model.TcpChatServer;
 import model.UserState;
 
 import java.nio.file.Path;
@@ -38,10 +29,6 @@ public final class Main {
     public static void main(String[] args) throws Exception {
         String mode = args.length == 0 ? "demo" : args[0];
 
-        if (mode.equals("benchmark")) {
-            BenchmarkMain.main(java.util.Arrays.copyOfRange(args, 1, args.length));
-            return;
-        }
         if (mode.equals("health")) {
             String host = args.length > 1
                     ? args[1]
@@ -74,51 +61,39 @@ public final class Main {
             return;
         }
 
-        if (mode.equals("proto-health")) {
-            try {
-                new RemoteEndpoint(args[1], Integer.parseInt(args[2])).handle(
-                        Request.newBuilder().setOperation(Request.Operation.METRICS).build());
-            } catch (RuntimeException exception) { System.exit(1); }
-            return;
-        }
-        if (mode.equals("storage")) {
-            try (var repository = new JdbcChatRepository(Path.of(args[1]));
-                 var server = new ProtoServer(args[3], Integer.parseInt(args[2]), Integer.parseInt(args[4]),
-                         () -> new RepositoryEndpoint(repository))) {
-                waitForShutdown(() -> {
-                    try { server.close(); } finally { repository.close(); }
-                });
-            }
-            return;
-        }
-        if (mode.equals("application")) {
-            try (var chat = new ChatServer(new RemoteChatRepository(args[3], Integer.parseInt(args[4])));
-                 var server = new ProtoServer(args[2], Integer.parseInt(args[1]), Integer.parseInt(args[5]),
-                         () -> new ApplicationEndpoint(chat))) {
-                waitForShutdown(server);
-            }
-            return;
-        }
         if (mode.equals("server")) {
-            var backend = new RemoteEndpoint(args[3], Integer.parseInt(args[4]));
-            try (var server = new TcpChatServer(new ChatFacade(backend), args[2],
-                    Integer.parseInt(args[1]), Integer.parseInt(args[5]))) {
-                waitForShutdown(server);
+            Path database = args.length > 1
+                    ? Path.of(args[1])
+                    : Path.of("data", "chat");
+
+            int port = args.length > 2
+                    ? Integer.parseInt(args[2])
+                    : 5555;
+
+            String host = args.length > 3
+                    ? args[3]
+                    : "127.0.0.1";
+
+            try (TcpChatServer server =
+                         new TcpChatServer(database, host, port)) {
+                Runtime.getRuntime().addShutdownHook(
+                        new Thread(server::close)
+                );
+
+                new CountDownLatch(1).await();
             }
+
             return;
         }
-        Path database = args.length == 0 ? Path.of("data", "chat") : Path.of(args[0]);
-        try (LayeredChat server = new LayeredChat(database)) {
+
+        Path database = args.length == 0
+                ? Path.of("data", "chat")
+                : Path.of(args[0]);
+
+        try (TcpChatServer server =
+                     new TcpChatServer(database, 0)) {
             runDemo("127.0.0.1", server.getPort());
         }
-    }
-
-    private static void waitForShutdown(AutoCloseable resource) throws InterruptedException {
-        Runtime.getRuntime().addShutdownHook(new Thread(() -> {
-            try { resource.close(); }
-            catch (Exception exception) { throw new IllegalStateException("Ошибка остановки", exception); }
-        }));
-        new CountDownLatch(1).await();
     }
 
     private static void runDemo(

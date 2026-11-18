@@ -1,6 +1,6 @@
 import api.ChatService;
 import model.Message;
-import transport.TcpChatClient;
+import model.TcpChatClient;
 import model.UserState;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;

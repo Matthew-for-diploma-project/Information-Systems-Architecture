@@ -1,5 +1,5 @@
 import api.ChatService;
-import transport.ChatProtocol;
+import model.ChatProtocol;
 import model.UserState;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;

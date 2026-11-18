@@ -1,7 +1,7 @@
 import api.ChatService;
 import model.Message;
-import transport.TcpChatClient;
-import runner.LayeredChat;
+import model.TcpChatClient;
+import model.TcpChatServer;
 
 import java.nio.file.Path;
 import java.sql.Connection;
@@ -18,8 +18,8 @@ public final class RestartWriter {
                 .toAbsolutePath()
                 .normalize();
 
-        try (LayeredChat server =
-                     new LayeredChat(database);
+        try (TcpChatServer server =
+                     new TcpChatServer(database, 0);
              ChatService chat =
                      new TcpChatClient(
                              "127.0.0.1",

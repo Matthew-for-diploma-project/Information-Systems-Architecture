@@ -1,8 +1,0 @@
-time=2026-11-18T09:01:09.640370680Z
-java=23.0.1+11
-os=Linux 6.18.57
-arch=amd64
-available_processors=9
-heap_each=-Xms32m -Xmx128m
-mode=three independent JVM processes, loopback TCP, fresh H2 per trial
-warmup=5 SEND per client; measured=SEND; no console output

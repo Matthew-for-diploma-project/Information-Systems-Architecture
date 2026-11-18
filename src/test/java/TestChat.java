@@ -1,17 +1,17 @@
 import api.ChatService;
-import transport.TcpChatClient;
-import runner.LayeredChat;
+import model.TcpChatClient;
+import model.TcpChatServer;
 
 import java.io.IOException;
 import java.nio.file.Path;
 
 // Тест: сервер и клиент общаются только через TCP.
 final class TestChat implements AutoCloseable {
-    private final LayeredChat server;
+    private final TcpChatServer server;
     final ChatService chat;
 
     TestChat(Path database) throws IOException {
-        server = new LayeredChat(database);
+        server = new TcpChatServer(database, 0);
 
         try {
             chat = newClient();

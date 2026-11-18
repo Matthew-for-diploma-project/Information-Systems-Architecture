@@ -1,0 +1,7 @@
+target
+data
+.idea
+.git
+*.zip
+*.mv.db
+*.trace.db

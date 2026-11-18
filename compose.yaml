@@ -1,0 +1,75 @@
+name: group-chat-lab4
+
+services:
+  server:
+    image: group-chat-lab4-app:local
+
+    build:
+      context: .
+      target: runtime
+
+    command:
+      - server
+      - /data/chat
+      - "5555"
+      - 0.0.0.0
+
+    ports:
+      - "127.0.0.1:5555:5555"
+
+    volumes:
+      - chat-data:/data
+
+    healthcheck:
+      test: "java -jar /app/chat.jar health 127.0.0.1 5555"
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 15s
+
+    stop_grace_period: 30s
+
+
+  client:
+    image: group-chat-lab4-app:local
+
+    build:
+      context: .
+      target: runtime
+
+    command:
+      - client
+      - server
+      - "5555"
+
+    depends_on:
+      server:
+        condition: service_healthy
+
+    profiles:
+      - tools
+
+  tests:
+    image: group-chat-lab4-tests:local
+
+    build:
+      context: .
+      target: tests
+
+    environment:
+      CHAT_HOST: server
+      CHAT_PORT: "5555"
+
+    depends_on:
+      server:
+        condition: service_healthy
+
+    volumes:
+      - maven-cache:/root/.m2
+
+    profiles:
+      - tools
+
+volumes:
+  chat-data:
+  maven-cache:

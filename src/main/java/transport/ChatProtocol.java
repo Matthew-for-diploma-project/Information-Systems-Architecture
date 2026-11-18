@@ -1,4 +1,6 @@
-package model;
+package transport;
+
+import model.*;
 
 import java.io.EOFException;
 import java.io.IOException;
